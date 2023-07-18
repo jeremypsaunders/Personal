@@ -394,233 +394,102 @@ void D1_control_loop() {
   }
   D1_RelayCmd_prev = D1_RelayCmd;
 }
-/*
-void D2_control_loop() {    
 
-  if ( D2_toggled ) {                                             //goes true for one loop when D2 toggle button is pressed
-    Serial.println("D2 MANUAL TOGGLE");
-    if ( D2_RelayCmd == 0 ) {                                     //if toggle button pressed while relay command is 0, set mode command to 1
-      D2_ModeCmdRqst = 1;
-    }
-    else {                                                      //if toggle button pressed while relay command is 1, set mode command to 0
-      D2_ModeCmdRqst = 0;
-    }
-  } 
-
-  if ( D2_ModeCmdRqst != D2_ModeCmdRqst_prev ) {                  //Use a placeholder so Blynk doesn't write a control variable mid-loop
-    D2_ModeCmd = D2_ModeCmdRqst;
-      if ( D2_ModeCmd != 3 ) {                                  
-        D2_ResetCycleTimer = true;                              
-      }
-  }
-  D2_ModeCmdRqst_prev = D2_ModeCmdRqst;
-
-  switch (D2_ModeCmd) {                                     
-    
-    case 0: //OFF
-	    
-      if ( digitalRead(relay2_out) != LOW || D2_ModeCmd != D2_ModeCmd_prev ) { //Do this once when entering DAILY mode or if output did not write
-        Blynk.setProperty(V10, "color", WARNING_RED);              
-        Blynk.setProperty(V18, "isHidden", true);
-        Blynk.setProperty(V19, "isHidden", true);
-        Blynk.virtualWrite(V10, 0);
-        digitalWrite(relay2_out, LOW);
-        D2_RelayCmd = 0;
-      }
-      break; 
-
-    case 1: //ON
-	    
-      if ( digitalRead(relay2_out) != HIGH || D2_ModeCmd != D2_ModeCmd_prev ) { //Do this once when entering DAILY mode or if output did not write
-        Blynk.setProperty(V10, "color", GARDENTEK_GREEN);            
-        Blynk.setProperty(V18, "isHidden", true);
-        Blynk.setProperty(V19, "isHidden", true);
-        Blynk.virtualWrite(V10, 1);
-        digitalWrite(relay2_out, HIGH);
-        D2_RelayCmd = 1;
-      }
-      break;
-
-    case 2: //DAILY TIMER
-      if ( D2_ModeCmd != D2_ModeCmd_prev ) {                    //Do this once when entering DAILY mode
-        Blynk.setProperty(V19, "isHidden", true);
-      } 
-
-      //Check for and display INVALID CONFIG!	    
-      if ( ( D2_Daily_Timer_ON_Time == 0 || D2_Daily_Timer_OFF_Time == 0 || D2_Daily_Timer_ON_Time == D2_Daily_Timer_OFF_Time ) && ( D2_Daily_Timer_ON_Time != D2_Daily_Timer_ON_Time_prev || D2_Daily_Timer_OFF_Time != D2_Daily_Timer_OFF_Time_prev ) ) {
-        Blynk.setProperty(V10, "color", WARNING_RED);          
-        Blynk.setProperty(V18, "isHidden", false);		
-        digitalWrite(relay2_out, LOW);
-        D2_RelayCmd = 0;
-        D2_Daily_Timer_Fault_prev = true;
-      }
-
-      //Run the daily timer	      
-      else {
-        if ( D2_ModeCmd != D2_ModeCmd_prev || D2_Daily_Timer_Fault_prev == true ) { //Do this once when entering DAILY mode or when time settings warning clears
-          Blynk.setProperty(V10, "color", GARDENTEK_BLUE);               
-          Blynk.setProperty(V18, "isHidden", true);
-        }
-        D2_Daily_Timer_Fault_prev = false;
-         
-        if ( D2_Daily_Timer_ON_Time < D2_Daily_Timer_OFF_Time ) {
-          if ( current_seconds_after_midnight >= D2_Daily_Timer_ON_Time && current_seconds_after_midnight < D2_Daily_Timer_OFF_Time ) {
-            digitalWrite(relay2_out, HIGH);
-            D2_RelayCmd = 1;
-          }
-          else {
-            digitalWrite(relay2_out, LOW); 
-            D2_RelayCmd = 0;
-          }
-        }
-        if ( D2_Daily_Timer_ON_Time > D2_Daily_Timer_OFF_Time ) {
-          if ( current_seconds_after_midnight >= D2_Daily_Timer_ON_Time || current_seconds_after_midnight < D2_Daily_Timer_OFF_Time ) {
-            digitalWrite(relay2_out, HIGH);
-            D2_RelayCmd = 1;
-          }
-          else {
-            digitalWrite(relay2_out, LOW);
-            D2_RelayCmd = 0;
-          }
-        }
-      }
-      break;
-    
-    case 3: //CYCLE TIMER
-      if ( D2_ModeCmd != D2_ModeCmd_prev ) {                    //Do this once when entering CYCLE mode
-        Blynk.setProperty(V18, "isHidden", true);
-      }
-
-      //Check for and display INVALID CONFIG!	
-      if ( D2_Cycle_Timer_ON_Length == 0 || D2_Cycle_Timer_OFF_Length == 0 ) {
-        Blynk.setProperty(V10, "color", WARNING_RED); 
-        Blynk.setProperty(V19, "isHidden", false);               
-        digitalWrite(relay2_out, LOW);
-        D2_RelayCmd = 0;
-        D2_ResetCycleTimer = true;
-      }
-
-      //Run the cycle timer
-      else {
-        
-	      //Reset cycle timer and calculate times (counts)      
-      	if ( D2_ResetCycleTimer == true || D2_Cycle_Timer_ON_Length != D2_Cycle_Timer_ON_Length_prev || D2_Cycle_Timer_OFF_Length != D2_Cycle_Timer_OFF_Length_prev ) {
-          Blynk.setProperty(V10, "color", GARDENTEK_GREEN);
-          Blynk.setProperty(V19, "isHidden", true); 
-          D2_ResetCycleTimer = false;	        		              //clear this in case this is how we got here
-          D2_Cycle_Timer_ON_Counts = D2_Cycle_Timer_ON_Length / loop_rate;
-	        D2_Cycle_Timer_OFF_Counts = D2_Cycle_Timer_OFF_Length / loop_rate;
-	        D2_Cycle_ON_current_count = 1;
-          D2_Cycle_OFF_current_count = 1;
-        }
-
-	      //Turn ON for calculated counts and the OFF for calculated counts. Then reset.      
-        if ( D2_Cycle_ON_current_count <= D2_Cycle_Timer_ON_Counts ) {
-          D2_Cycle_ON_current_count++;
-	        digitalWrite(relay2_out, HIGH);
-          D2_RelayCmd = 1;
-	      }  
-	      else {
-  	      if ( D2_Cycle_OFF_current_count <= D2_Cycle_Timer_OFF_Counts - 1 ) {   //Subtract 1 count that will be used to set the reset flag true 
-	          D2_Cycle_OFF_current_count++;	
-            digitalWrite(relay2_out, LOW);
-	          D2_RelayCmd = 0;
-    	    }
-	        else {                                                                 //Here we use the subtracted count to write reset flag true
-	          D2_ResetCycleTimer = true;
-            digitalWrite(relay2_out, LOW);
-            D2_RelayCmd = 0;	
-  	      }
-	      }     
-      }
-      break;
-  }
-}
-*/
-
-/*This will be removed once indicators and buttons are running
-//This function sets a flag for one control loop when it detects the rising edge of the manual toggle button for each device.
-void DetectManualToggles() {
-
-  //Device1
-  D1_toggled = 0;
-  D1_Toggle_Button = digitalRead(button1);
-  if ( (D1_Toggle_Button != D1_Toggle_Button_prev) && D1_Toggle_Button == 1 ) {       //Checking for rising edge of toggle button
-    D1_toggled = 1;                                    
-  }
-  D1_Toggle_Button_prev = D1_Toggle_Button;  
-
-  //Device2
-  D2_toggled = 0;
-  D2_Toggle_Button = digitalRead(button2);
-  if ( (D2_Toggle_Button != D2_Toggle_Button_prev) && D2_Toggle_Button == 1 ) {       //Checking for rising edge of toggle button
-    D2_toggled = 1;                                    
-  }
-  D2_Toggle_Button_prev = D2_Toggle_Button;
-
-  //Device3
-  D3_toggled = 0;
-  D3_Toggle_Button = digitalRead(button3);
-  if ( (D3_Toggle_Button != D3_Toggle_Button_prev) && D3_Toggle_Button == 1 ) {       //Checking for rising edge of toggle button
-    D3_toggled = 1;                                    
-  }
-  D3_Toggle_Button_prev = D3_Toggle_Button;
-
-  //Device4
-  D4_toggled = 0;
-  D4_Toggle_Button = digitalRead(button4);
-  if ( (D4_Toggle_Button != D4_Toggle_Button_prev) && D4_Toggle_Button == 1 ) {       //Checking for rising edge of toggle button
-    D4_toggled = 1;                                    
-  }
-  D4_Toggle_Button_prev = D4_Toggle_Button;
-}
-*/
-
-/////////////////////PRELIMINARY DISPLAYS CODE//////////////////////////////////////////
+/////////////////////PRELIMINARY DISPLAYS CODE USING BUTTON PRESSED FUNCTIONS//////////////////////////////////////////
 
 //need to write to display from EEPROM on bootup, then again on first blynk connect
-
-if ( (millis() - last button pressed time) > 5min ) {
-
-  mode_indicator = Dx_ModeCmd; logic to look up dislay device and Dx_ModeCmd;
-  ontime_indicator = logic to look at display device, ModeCmd, and pick control logic loop time value
-  offtime_indicator = logic to look at display device, ModeCmd, and pick control logic loop time value
-  
-  unblink mode and times indicators
-  reset all edit mode and edit time flags
-  reset modebutton firstpress flags
-  
-  turn the indicators off
+/*
+if ( ((millis() - last button pressed time) > 300000) || displays_off == false ) { //300000 = 5min
   displays_off = true;
+  
+  //Command all indicators to be off here
+
+  //write current display device real values back to indicators
+  switch (display_device) {  
+    case 0: //Device 1
+      mode_indicator = D1_ModeCmd;
+      if(D1_ModeCmd == 2) { //DAILY TIMER
+        ontime_indicator = D1_Daily_Timer_ON_Time;
+        offtime_indicator = D1_Daily_Timer_OFF_Time;      
+      }
+      if(D1_ModeCmd == 3) { //CYCLE TIMER
+        ontime_indicator = D1_Cycle_Timer_ON_Length;
+        offtime_indicator = D1_Cycle_Timer_OFF_Length;      
+      }  
+    case 1: //Device 2
+      mode_indicator = D2_ModeCmd;
+      if(D2_ModeCmd == 2) { //DAILY TIMER
+        ontime_indicator = D2_Daily_Timer_ON_Time;
+        offtime_indicator = D2_Daily_Timer_OFF_Time;      
+      }
+      if(D2_ModeCmd == 3) { //CYCLE TIMER
+        ontime_indicator = D2_Cycle_Timer_ON_Length;
+        offtime_indicator = D2_Cycle_Timer_OFF_Length;      
+      }        
+    case 2: //Device 3
+      mode_indicator = D3_ModeCmd;
+      if(D3_ModeCmd == 2) { //DAILY TIMER
+        ontime_indicator = D3_Daily_Timer_ON_Time;
+        offtime_indicator = D3_Daily_Timer_OFF_Time;      
+      }
+      if(D3_ModeCmd == 3) { //CYCLE TIMER
+        ontime_indicator = D3_Cycle_Timer_ON_Length;
+        offtime_indicator = D3_Cycle_Timer_OFF_Length;      
+      }  
+    case 3: //Device 4
+      mode_indicator = D4_ModeCmd;
+      if(D4_ModeCmd == 2) { //DAILY TIMER
+        ontime_indicator = D4_Daily_Timer_ON_Time;
+        offtime_indicator = D4_Daily_Timer_OFF_Time;      
+      }
+      if(D4_ModeCmd == 3) { //CYCLE TIMER
+        ontime_indicator = D4_Cycle_Timer_ON_Length;
+        offtime_indicator = D4_Cycle_Timer_OFF_Length;      
+      }         
+  }
+  
+  //turn off all blinks
+  mode_indicator_blink = 0;
+  ontime_indicator_blink = 0;
+  offtime_indicator_blink = 0;
 }
 
 void (ConfirmButtonPressed) {
-  if (mode_indicator_blink == 2) {
-    mode_indicator_blink == 0;
+  if (displays_off == false) { //Disable this button if displays are turned off
+    last_buttonpress_time = millis();
 
-    //Write all mode cmd requests just for simplicity of code
-    D1_ModeCmdRqst = D1_ModeCmd_Ind;
-    D2_ModeCmdRqst = D2_ModeCmd_Ind;
-    D3_ModeCmdRqst = D3_ModeCmd_Ind;
-    D4_ModeCmdRqst = D4_ModeCmd_Ind;
+    if (mode_indicator_blink == 2) {
+      mode_indicator_blink == 0;
 
-    //write to Blynk server here
+      //Write all mode cmd requests just for simplicity of code
+      D1_ModeCmdRqst = D1_ModeCmd_Ind;
+      D2_ModeCmdRqst = D2_ModeCmd_Ind;
+      D3_ModeCmdRqst = D3_ModeCmd_Ind;
+      D4_ModeCmdRqst = D4_ModeCmd_Ind;
+
+      //write to Blynk server here or in main loop?
+    }
+    if (ontime_indicator_blink == 2)
   }
-  if (ontime_indicator_blink == 2)
 }
 
 //When the panel DEVICE button is pressed
 void (DeviceButtonPressed) {
   last_buttonpress_time = millis();
-  
-  if ( display_device == 3 || displays_off == true ) { //initialize display_device to 0 at bootup
-    displays_off = false;
+  if (displays_off == true) {
+    //turn on all indicators command
     display_device = 0;
+    displays_off = false;
   }
   else {
-    dispay_device++;
+    if ( display_device == 3 ) { 
+      display_device = 0;
+    }
+    else {
+      display_device++;
+    }
   }
-    
+
   switch (display_device) {
   case 0: //Device 1
     device_indicator = "D1_Name"; //Write D1_Name from EEPROM at bootup in case there is no Blynk server. Also write this to the display at bootup.
@@ -719,85 +588,179 @@ void (DeviceButtonPressed) {
 }
 
 void (ModeButtonPressed) {
+  if (displays_off == false) {
+    last_buttonpress_time = millis();
 
-  switch (display_device) {
-  case 0: //DEVICE 1
+    switch (display_device) {
+   
+    case 0: //DEVICE 1
 
-    switch (D1_ModeCmd_Ind) ( //Cycle through the different modes, also writing time indicators 
-      case 0: //OFF-->ON
-        D1_ModeCmd_Ind = 1; //write next mode
-        ontime_indicator = "----";
-        offtime_indicator = "----";
-        if (D1_ModeCmd_Ind != D1_ModeCmd) { //if next mode isn't the current actual mode then blink
-          mode_indicator_blink = 2; //2 Hz blink to display here
-        }
-        else {
-          mode_indicator_blink = 0; //0 Hz blink to display here
-        }
-      case 1: //ON-->DAILY TIMER
-        D1_ModeCmd_Ind = 2;
-        ontime_indicator = D1_OnTime_Ind;
-        offtime_indicator = D1_OffTime_Ind;
-        if (D1_ModeCmd_Ind != D1_ModeCmd) { //if next mode isn't the current actual mode then blink
-          mode_indicator_blink = 2; //2 Hz blink to display here
-        }
-        else {
-          mode_indicator_blink = 0; //0 Hz blink to display here
-        }
-      case 2: //DAILY TIMER-->CYCLE TIMER
-        D1_ModeCmd_Ind = 3;
-        ontime_indicator = D1_OnTime_Ind;
-        offtime_indicator = D1_OffTime_Ind;
-        if (D1_ModeCmd_Ind != D1_ModeCmd) { //if next mode isn't the current actual mode then blink
-          mode_indicator_blink = 2; //2 Hz blink to display here
-        }
-        else {
-          mode_indicator_blink = 0; //0 Hz blink to display here
-        }
-      case 3: //CYCLE TIMER-->OFF
-        D1_ModeCmd_Ind = 0;
-        ontime_indicator = "----";
-        offtime_indicator = "----";
-        if (D1_ModeCmd_Ind != D1_ModeCmd) { //if next mode isn't the current actual mode then blink
-          mode_indicator_blink = 2; //2 Hz blink to display here
-        }
-        else {
-          mode_indicator_blink = 0; //0 Hz blink to display here
-        }
+      switch (D1_ModeCmd_Ind) ( //Cycle through the different modes, also writing time indicators 
+        case 0: //OFF-->ON
+          D1_ModeCmd_Ind = 1; //write next mode
+          ontime_indicator = "----";
+          offtime_indicator = "----";
+          if (D1_ModeCmd_Ind != D1_ModeCmd) { //if next mode isn't the current actual mode then blink
+            mode_indicator_blink = 2; //2 Hz blink to display here
+          }
+          else {
+            mode_indicator_blink = 0; //0 Hz blink to display here
+          }
+          break;
+        case 1: //ON-->DAILY TIMER
+          D1_ModeCmd_Ind = 2;
+          ontime_indicator = D1_OnTime_Ind;
+          offtime_indicator = D1_OffTime_Ind;
+          if (D1_ModeCmd_Ind != D1_ModeCmd) { //if next mode isn't the current actual mode then blink
+            mode_indicator_blink = 2; //2 Hz blink to display here
+          }
+          else {
+            mode_indicator_blink = 0; //0 Hz blink to display here
+          }
+          break;
+        case 2: //DAILY TIMER-->CYCLE TIMER
+          D1_ModeCmd_Ind = 3;
+          ontime_indicator = D1_OnTime_Ind;
+          offtime_indicator = D1_OffTime_Ind;
+          if (D1_ModeCmd_Ind != D1_ModeCmd) { //if next mode isn't the current actual mode then blink
+            mode_indicator_blink = 2; //2 Hz blink to display here
+          }
+          else {
+            mode_indicator_blink = 0; //0 Hz blink to display here
+          }
+          break;
+        case 3: //CYCLE TIMER-->OFF
+          D1_ModeCmd_Ind = 0;
+          ontime_indicator = "----";
+          offtime_indicator = "----";
+          if (D1_ModeCmd_Ind != D1_ModeCmd) { //if next mode isn't the current actual mode then blink
+            mode_indicator_blink = 2; //2 Hz blink to display here
+          }
+          else {
+            mode_indicator_blink = 0; //0 Hz blink to display here
+          }
+          break;
+    
+      mode_indicator = D1_ModeCmd_Ind; //write to display here
+      break;
+
+      case 1: //DEVICE 2
+      //COPY FINAL Device 1 CODE HERE
+      mode_indicator = D2_ModeCmd_Ind; //write to display here
+      break;
+
+      case 2: //DEVICE 3
+      //COPY FINAL Device 1 CODE HERE
+      mode_indicator = D3_ModeCmd_Ind; //write to display here
+      break;
+
+      case 3: //DEVICE 4
+      //COPY FINAL Device 1 CODE HERE      
+      mode_indicator = D4_ModeCmd_Ind; //write to display here
+      break;
     }
-  
-    mode_indicator = D1_ModeCmd_Ind; //write to display here
+  }
+}   
+*/
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//Call all of these functions with hardware interrupts so the flag sets instantly
+void DeviceButtonPressed() { 
+  DeviceButtonPressed = true;
+}
+void ModeButtonPressed() { 
+  if (indicators_off == false) {
+    ModeButtonPressed = true; 
   }
-    
-    
-    D1_ModeCmd_Indmode_indicator = D1_ModeCmd_Ind;
-    ontime_indicator = D1_OnTime_Ind;
-    offtime_indicator = D1_OnTime_Ind; 	
-    break;
-  case 2:
-    device_indicator = "D1_Name";
-    mode_indicator = D1_ModeCmd_Ind;
-    ontime_indicator = D1_OnTime_Ind;
-    offtime_indicator = D1_OnTime_Ind; 	 
-    break;
-  case 3:
-    device_indicator = "D1_Name";
-    mode_indicator = D1_ModeCmd_Ind;
-    ontime_indicator = D1_OnTime_Ind;
-    offtime_indicator = D1_OnTime_Ind; 	
-    break;
-  case 4:
-    device_indicator = "D1_Name";
-    mode_indicator = D1_ModeCmd_Ind;
-    ontime_indicator = D1_OnTime_Ind;
-    offtime_indicator = D1_OnTime_Ind; 	
-    break;
+}
+void SetButtonPressed() { 
+  if (indicators_off == false) {
+    SetButtonPressed = true;
+  } 
+}  
+void IncButtonPressed() {   
+  if (indicators_off == false) {
+    IncButtonPressed = true;
+  }   
+}
+void DecButtonPressed() { 
+  if (indicators_off == false) {
+    DecButtonPressed = true;
   }
-  
+}
+void ConfirmButtonPressed() {
+  if (indicators_off == false) {
+    ConfirmButtonPressed = true;
+  }
 }
 
-/*
+void PanelTimeout() {
+  if ( ((millis() - last_buttonpress_time) > 300000) && indicators_off == false ) { //300000 = 5min. Ignoring the millis() rollover here, DNC if a timeout takes twice as long
+
+    //set indicator values back to device actuals
+    switch (display_device) {  
+      case 0: //Device 1
+        mode_indicator = D1_ModeCmd;
+        if(D1_ModeCmd == 2) { //DAILY TIMER
+          ontime_indicator = D1_Daily_Timer_ON_Time;
+          offtime_indicator = D1_Daily_Timer_OFF_Time;      
+        }
+        if(D1_ModeCmd == 3) { //CYCLE TIMER
+          ontime_indicator = D1_Cycle_Timer_ON_Length;
+          offtime_indicator = D1_Cycle_Timer_OFF_Length;      
+        }  
+        break;
+      case 1: //Device 2
+        mode_indicator = D2_ModeCmd;
+        if(D2_ModeCmd == 2) { //DAILY TIMER
+          ontime_indicator = D2_Daily_Timer_ON_Time;
+          offtime_indicator = D2_Daily_Timer_OFF_Time;      
+        }
+        if(D2_ModeCmd == 3) { //CYCLE TIMER
+          ontime_indicator = D2_Cycle_Timer_ON_Length;
+          offtime_indicator = D2_Cycle_Timer_OFF_Length;      
+        }        
+        break;
+      case 2: //Device 3
+        mode_indicator = D3_ModeCmd;
+        if(D3_ModeCmd == 2) { //DAILY TIMER
+          ontime_indicator = D3_Daily_Timer_ON_Time;
+          offtime_indicator = D3_Daily_Timer_OFF_Time;      
+        }
+        if(D3_ModeCmd == 3) { //CYCLE TIMER
+          ontime_indicator = D3_Cycle_Timer_ON_Length;
+          offtime_indicator = D3_Cycle_Timer_OFF_Length;      
+        }  
+        break;
+      case 3: //Device 4
+        mode_indicator = D4_ModeCmd;
+        if(D4_ModeCmd == 2) { //DAILY TIMER
+          ontime_indicator = D4_Daily_Timer_ON_Time;
+          offtime_indicator = D4_Daily_Timer_OFF_Time;      
+        }
+        if(D4_ModeCmd == 3) { //CYCLE TIMER
+          ontime_indicator = D4_Cycle_Timer_ON_Length;
+          offtime_indicator = D4_Cycle_Timer_OFF_Length;      
+        }    
+        break;     
+    }
+
+    //turn off all indicators
+    device_indicator = OFF;
+    mode_indicator = OFF;
+    ontime_indicator = OFF;
+    offtime_indicator = OFF;
+
+    //turn off all blinks
+    mode_indicator_blink = 0;
+    ontime_indicator_blink = 0;
+    offtime_indicator_blink = 0;
+  
+    indicators_off = true;
+  }
+}
+
 //This function controls the panel indicator and reads panel buttons
 void PanelControl() {
   
@@ -808,22 +771,29 @@ void PanelControl() {
   PANEL_Decrement_Button = digitalRead(paneldecbutton); //need to assign pin
   PANEL_Confirm_Button = digitalRead(panelconfirmbutton); //need to assign pin
 
-  if ( PANEL_Device_Button == 1 && PANEL_Device_Button_prev == 0 ) {
-    if (display_device == 3) { //this if-else increments the mode cmd in a loop that rolls over 0-3
+  if ( DeviceButtonPressed == true ) {
+    last_buttonpress_time = millis();
+    if (indicators_off == true) {
       display_device = 0;
+      indicators_off = false;
     }
     else {
-      dispay_device++;
+      if ( display_device == 3 ) { 
+        display_device = 0;
+      }
+      else {
+        display_device++;
+      }
     }
   }
-  PANEL_Device_Button_prev = PANEL_Device_Button;
 
-  switch (display_device) {   //write this to EEPROM and use last value?
+  switch (display_device) {   //Panel will always boot in
 
     case 0:
-      device_indicator = "D1_Name";
-      if ( mode_button_pressed || D1_Mode_Change_latched ) {  //while viewing device 1 latch in blinking mode indicator if MODE button pressed
-        if ( mode_button_pressed && D1_Mode_Change_latched ) {}  //this would be for subsequent MODE button presses while viewing this device
+      device_indicator = parse(D1_Name);
+
+      if ( ModeButtonPressed == true || D1_Mode_Change_latched == true ) {  //while viewing device 1 latch in blinking mode indicator if MODE button pressed
+        if ( ModeButtonPressed == true && D1_Mode_Change_latched == true ) {  //this would be for subsequent MODE button presses while viewing this device
           if (D1_ModeCmd_Ind == 3) { //this if-else increments the mode cmd in a loop that rolls over 0-3
             D1_ModeCmd_Ind = 0;
           }
@@ -832,80 +802,310 @@ void PanelControl() {
           }
         }
         D1_Mode_Change_latched = true;
-        mode_indicator = BLINKING;
-        mode_indicator = D1_ModeCmd_Ind;
-        if (confirm pressed or timeout) { //probably can move these stop blinking cmds and latch resets all to the end of the logic
-          stop blinking indicator;
-          D1_Mode_Change_latched = false;
-        }
+        mode_indicator_blink = 2; //2 Hz
+        mode_indicator = parse(D1_ModeCmd_Ind);
       }
       else {
-        mode_indicator = D1_ModeCmd;
-	D1_Mode_Cmd_Ind = D1_ModeCmd;
-  	mode_indicator = NOTBLINKING;
+        mode_indicator = parse(D1_ModeCmd);
+      	mode_indicator_blink = 0;
+        D1_ModeCmd_Ind = D1_ModeCmd;
       }
 
       switch ( D1_ModeCmd_Ind) {
-        case 0:  
+        case 0: //OFF
           ontime_indicator = "----";
           offtime_indicator = "----";
           break;
-        case 1:
+        case 1: //ON
           ontime_indicator = "----";
           offtime_indicator = "----";
           break;
-        case 2:
-          if ( set_button_pressed || D1_Daily_Time_Change_latched ) {  //while viewing device 1 latch in blinking mode indicator if MODE button pressed
-            if ( set_button_pressed && D1_Daily_Time_Change_latched ) {}  //SET button has already been pressed once (don't increment on first press)
-              if (timer_segment == 3) { //this if-else increments the mode cmd in a loop that rolls over 0-3
+        case 2: //DAILY TIMER
+          if ( SetButtonPressed == true || D1_Daily_Time_Change_latched == true ) {  //while viewing device 1 latch in blinking mode indicator if MODE button pressed
+            if ( SetButtonPressed == true && D1_Daily_Time_Change_latched == true ) { //SET button has already been pressed once (don't increment on first press)
+              if (timer_segment == 4) { //this if-else increments the mode cmd in a loop that rolls over 0-4
                 timer_segment = 0;
               }
               else {
                 timer_segment++;
               }
-	    D1_Daily_Time_Change_latched = true;
-	    ontime_indicator = BLINKING;
-            ontime_indicator = D1_Daily_Timer_ON_Time_Ind; 
-            offtime_indicator = D1_Daily_Timer_OFF_Time_Ind;
+            }  
+	          D1_Daily_Time_Change_latched = true;
+	          ontime_indicator_blink = 2; //2 Hz
+            offtime_indicator_blink = 2; //2 Hz
 
             switch ( timer_segment ) { //figure out where to initialize this to ON HOURS segment to 0
+              
               case 0: //SET ON HOURS
-		offtime_indicator = "HR"	
-	        if ( inc_button_pressed && HRSVALUE < 23 ) {
-                  D1_Daily_Timer_ON_Time_Ind = D1_Daily_Timer_ON_Time_Ind + 3600;
+                D1_ON_HR = D1_Daily_Timer_ON_Time_Ind / 3600; //parse HOUR
+                D1_ON_MIN = (D1_Daily_Timer_ON_Time_Ind - D1_ON_HR*3600) / 60; //parse MIN
+
+	              if ( IncButtonPressed == true) {
+                  if ( D1_ON_HR < 23 ) {
+                    D1_ON_HR++; //add 1 hour
+                  }
+                  if ( D1_ON_HR == 23 ) {
+                    D1_ON_HR = D1_ON_HR - 23; //subract 23 hours to reset to 00
+                  }
                 }
-                if ( down button pressed && HRSVALUE > 0 ) {
-                  D1_Daily_Timer_ON_Time_Ind = D1_Daily_Timer_ON_Time_Ind - 3600;
+                if ( DecButtonPressed == true ) {
+                  if ( D1_ON_HR > 0 ) {
+                    D1_ON_HR--; //subtract 1 hour
+                  }  
+                  if ( D1_ON_HR == 0 ) {
+                    D1_ON_HR = D1_ON_HR + 23; //add 23 hours to reset to 23
+                  }                  
                 }  
+
+                ontime_indicator = D1_ON_HR + "  "; 
+                offtime_indicator = "HR";
+                D1_Daily_Timer_ON_Time_Ind = D1_ON_HR*3600 + D1_ON_MIN*60; //reassemble time just in case
                 break;
 		
               case 1: //SET ON MINS 
-		offtime_indicator = "MIN"	
-	        if ( inc_button_pressed && MINSVALUE < 59 ) {
-                  D1_Daily_Timer_ON_Time_Ind = D1_Daily_Timer_ON_Time_Ind + 60;
+			          D1_ON_HR = D1_Daily_Timer_ON_Time_Ind / 3600; //parse HOUR
+                D1_ON_MIN = (D1_Daily_Timer_ON_Time_Ind - D1_ON_HR*3600) / 60; //parse MIN 
+
+	              if ( IncButtonPressed == true) {
+                  if ( D1_ON_MIN < 59 ) {
+                    D1_ON_MIN++; //add 1 min
+                  }
+                  if ( D1_ON_MIN == 59 ) {
+                    D1_ON_MIN = D1_ON_MIN - 59; //subract 59 mins to reset to 00
+                  }
                 }
-                if ( down button pressed && MINSVALUE > 0 ) {
-                  D1_Daily_Timer_ON_Time_Ind = D1_Daily_Timer_ON_Time_Ind - 60;
-                }  	      
+                if ( DecButtonPressed == true ) {
+                  if ( D1_ON_MIN > 0 ) {
+                    D1_ON_MIN--; //subtract 1 hour
+                  }  
+                  if ( D1_ON_MIN == 0 ) {
+                    D1_ON_MIN = D1_ON_MIN + 59; //add 59 mins to reset to 59
+                  }                  
+                }  
+
+                ontime_indicator = "  " + D1_ON_MIN; 
+                offtime_indicator = "MIN";
+                D1_Daily_Timer_ON_Time_Ind = D1_ON_HR*3600 + D1_ON_MIN*60; //reassemble time just in case
                 break;
+
               case 2: //OFF HRS
+                D1_OFF_HR = D1_Daily_Timer_OFF_Time_Ind / 3600; //parse HOUR
+                D1_OFF_MIN = (D1_Daily_Timer_OFF_Time_Ind - D1_OFF_HR*3600) / 60; //parse MIN
+
+	              if ( IncButtonPressed == true) {
+                  if ( D1_OFF_HR < 23 ) {
+                    D1_OFF_HR++; //add 1 hour
+                  }
+                  if ( D1_OFF_HR == 23 ) {
+                    D1_OF_HR = D1_OF_HR - 23; //subract 23 hours to reset to 00
+                  }
+                }
+                if ( DecButtonPressed == true ) {
+                  if ( D1_OFF_HR > 0 ) {
+                    D1_OFF_HR--; //subtract 1 hour
+                  }  
+                  if ( D1_OFF_HR == 0 ) {
+                    D1_OFF_HR = D1_OFF_HR + 23; //add 23 hours to reset to 23
+                  }                  
+                }  
+
+                offtime_indicator = D1_OFF_HR + "  "; 
+                ontime_indicator = "HR";
+                D1_Daily_Timer_OFF_Time_Ind = D1_OFF_HR*3600 + D1_OFF_MIN*60; //reassemble time just in case
                 break;
+
               case 3: //OFF MINS
+                D1_OFF_HR = D1_Daily_Timer_OFF_Time_Ind / 3600; //parse HOUR
+                D1_OFF_MIN = (D1_Daily_Timer_OFF_Time_Ind - D1_OFF_HR*3600) / 60; //parse MIN 
+
+	              if ( IncButtonPressed == true) {
+                  if ( D1_OFF_MIN < 59 ) {
+                    D1_OFF_MIN++; //add 1 min
+                  }
+                  if ( D1_OFF_MIN == 59 ) {
+                    D1_OFF_MIN = D1_OFF_MIN - 59; //subract 59 mins to reset to 00
+                  }
+                }
+                if ( DecButtonPressed == true ) {
+                  if ( D1_OFF_MIN > 0 ) {
+                    D1_OFF_MIN--; //subtract 1 hour
+                  }  
+                  if ( D1_OFF_MIN == 0 ) {
+                    D1_OFF_MIN = D1_OFF_MIN + 59; //add 59 mins to reset to 59
+                  }                  
+                }  
+
+                offtime_indicator = "  " + D1_OFF_MIN; 
+                ontime_indicator = "MIN";
+                D1_Daily_Timer_OFF_Time_Ind = D1_OFF_HR*3600 + D1_OFF_MIN*60; //reassemble time just in case
                 break;
+
+              case 4: //SHOW ALL BLINKING
+                D1_ON_HR = D1_Daily_Timer_ON_Time_Ind / 3600; //parse HOUR
+                D1_ON_MIN = (D1_Daily_Timer_ON_Time_Ind - D1_ON_HR*3600) / 60; //parse MIN 
+                D1_OFF_HR = D1_Daily_Timer_OFF_Time_Ind / 3600; //parse HOUR
+                D1_OFF_MIN = (D1_Daily_Timer_OFF_Time_Ind - D1_OFF_HR*3600) / 60; //parse MIN 
+
+                ontime_indicator = D1_ON_HR + ":" D1_OFF_HR;
+                offtime_indicator = D1_OFF_HR + ":" + D1_OFF_MIN;
+                break;  
             }  
           }
           else {
-            ontime_indicator = D1_Daily_Timer_ON_Time = D1_Daily_Timer_ON_Time_Ind; 
-            offtime_indicator = D1_Daily_Timer_OFF_Time = D1_Daily_Timer_OFF_Time_Ind;
-	    ontime_indicator = NOTBLINKING;
-	    offtime_indicator = NOTBLINKING;
-  	    timer_segment = 0;
+            ontime_indicator = D1_Daily_Timer_ON_Time;
+            offtime_indicator = D1_Daily_Timer_OFF_Time;     
+            ontime_indicator_blink = 0;
+	          offtime_indicator_blink = 0;
+            D1_Daily_Timer_ON_Time_Ind = D1_Daily_Timer_ON_Time;
+            D1_Daily_Timer_OFF_Time_Ind = D1_Daily_Timer_OFF_Time;
+	          
+  	        timer_segment = 0; //initialize this at bootup to 0
           }
           break;
 
-        case 3: 
-        //logic for cycle timer similar to daily timer
+        case 3: //CYCLE
+          if ( SetButtonPressed == true || D1_Daily_Time_Change_latched == true ) {  //while viewing device 1 latch in blinking mode indicator if MODE button pressed
+            if ( SetButtonPressed == true && D1_Daily_Time_Change_latched == true ) { //SET button has already been pressed once (don't increment on first press)
+              if (timer_segment == 4) { //this if-else increments the mode cmd in a loop that rolls over 0-4
+                timer_segment = 0;
+              }
+              else {
+                timer_segment++;
+              }
+            }  
+	          D1_Daily_Time_Change_latched = true;
+	          ontime_indicator_blink = 2; //2 Hz
+            offtime_indicator_blink = 2; //2 Hz
+
+            switch ( timer_segment ) { //figure out where to initialize this to ON HOURS segment to 0
+              
+              case 0: //SET ON HOURS
+                D1_ON_HR = D1_Daily_Timer_ON_Time_Ind / 3600; //parse HOUR
+                D1_ON_MIN = (D1_Daily_Timer_ON_Time_Ind - D1_ON_HR*3600) / 60; //parse MIN
+
+	              if ( IncButtonPressed == true) {
+                  if ( D1_ON_HR < 23 ) {
+                    D1_ON_HR++; //add 1 hour
+                  }
+                  if ( D1_ON_HR == 23 ) {
+                    D1_ON_HR = D1_ON_HR - 23; //subract 23 hours to reset to 00
+                  }
+                }
+                if ( DecButtonPressed == true ) {
+                  if ( D1_ON_HR > 0 ) {
+                    D1_ON_HR--; //subtract 1 hour
+                  }  
+                  if ( D1_ON_HR == 0 ) {
+                    D1_ON_HR = D1_ON_HR + 23; //add 23 hours to reset to 23
+                  }                  
+                }  
+
+                ontime_indicator = D1_ON_HR + "  "; 
+                offtime_indicator = "HR";
+                D1_Daily_Timer_ON_Time_Ind = D1_ON_HR*3600 + D1_ON_MIN*60; //reassemble time just in case
+                break;
+		
+              case 1: //SET ON MINS 
+			          D1_ON_HR = D1_Daily_Timer_ON_Time_Ind / 3600; //parse HOUR
+                D1_ON_MIN = (D1_Daily_Timer_ON_Time_Ind - D1_ON_HR*3600) / 60; //parse MIN 
+
+	              if ( IncButtonPressed == true) {
+                  if ( D1_ON_MIN < 59 ) {
+                    D1_ON_MIN++; //add 1 min
+                  }
+                  if ( D1_ON_MIN == 59 ) {
+                    D1_ON_MIN = D1_ON_MIN - 59; //subract 59 mins to reset to 00
+                  }
+                }
+                if ( DecButtonPressed == true ) {
+                  if ( D1_ON_MIN > 0 ) {
+                    D1_ON_MIN--; //subtract 1 hour
+                  }  
+                  if ( D1_ON_MIN == 0 ) {
+                    D1_ON_MIN = D1_ON_MIN + 59; //add 59 mins to reset to 59
+                  }                  
+                }  
+
+                ontime_indicator = "  " + D1_ON_MIN; 
+                offtime_indicator = "MIN";
+                D1_Daily_Timer_ON_Time_Ind = D1_ON_HR*3600 + D1_ON_MIN*60; //reassemble time just in case
+                break;
+
+              case 2: //OFF HRS
+                D1_OFF_HR = D1_Daily_Timer_OFF_Time_Ind / 3600; //parse HOUR
+                D1_OFF_MIN = (D1_Daily_Timer_OFF_Time_Ind - D1_OFF_HR*3600) / 60; //parse MIN
+
+	              if ( IncButtonPressed == true) {
+                  if ( D1_OFF_HR < 23 ) {
+                    D1_OFF_HR++; //add 1 hour
+                  }
+                  if ( D1_OFF_HR == 23 ) {
+                    D1_OF_HR = D1_OF_HR - 23; //subract 23 hours to reset to 00
+                  }
+                }
+                if ( DecButtonPressed == true ) {
+                  if ( D1_OFF_HR > 0 ) {
+                    D1_OFF_HR--; //subtract 1 hour
+                  }  
+                  if ( D1_OFF_HR == 0 ) {
+                    D1_OFF_HR = D1_OFF_HR + 23; //add 23 hours to reset to 23
+                  }                  
+                }  
+
+                offtime_indicator = D1_OFF_HR + "  "; 
+                ontime_indicator = "HR";
+                D1_Daily_Timer_OFF_Time_Ind = D1_OFF_HR*3600 + D1_OFF_MIN*60; //reassemble time just in case
+                break;
+
+              case 3: //OFF MINS
+                D1_OFF_HR = D1_Daily_Timer_OFF_Time_Ind / 3600; //parse HOUR
+                D1_OFF_MIN = (D1_Daily_Timer_OFF_Time_Ind - D1_OFF_HR*3600) / 60; //parse MIN 
+
+	              if ( IncButtonPressed == true) {
+                  if ( D1_OFF_MIN < 59 ) {
+                    D1_OFF_MIN++; //add 1 min
+                  }
+                  if ( D1_OFF_MIN == 59 ) {
+                    D1_OFF_MIN = D1_OFF_MIN - 59; //subract 59 mins to reset to 00
+                  }
+                }
+                if ( DecButtonPressed == true ) {
+                  if ( D1_OFF_MIN > 0 ) {
+                    D1_OFF_MIN--; //subtract 1 hour
+                  }  
+                  if ( D1_OFF_MIN == 0 ) {
+                    D1_OFF_MIN = D1_OFF_MIN + 59; //add 59 mins to reset to 59
+                  }                  
+                }  
+
+                offtime_indicator = "  " + D1_OFF_MIN; 
+                ontime_indicator = "MIN";
+                D1_Daily_Timer_OFF_Time_Ind = D1_OFF_HR*3600 + D1_OFF_MIN*60; //reassemble time just in case
+                break;
+
+              case 4: //SHOW ALL BLINKING
+                D1_ON_HR = D1_Daily_Timer_ON_Time_Ind / 3600; //parse HOUR
+                D1_ON_MIN = (D1_Daily_Timer_ON_Time_Ind - D1_ON_HR*3600) / 60; //parse MIN 
+                D1_OFF_HR = D1_Daily_Timer_OFF_Time_Ind / 3600; //parse HOUR
+                D1_OFF_MIN = (D1_Daily_Timer_OFF_Time_Ind - D1_OFF_HR*3600) / 60; //parse MIN 
+
+                ontime_indicator = D1_ON_HR + ":" D1_OFF_HR;
+                offtime_indicator = D1_OFF_HR + ":" + D1_OFF_MIN;
+                break;  
+            }  
+          }
+          else {
+            ontime_indicator = D1_Daily_Timer_ON_Time;
+            offtime_indicator = D1_Daily_Timer_OFF_Time;     
+            ontime_indicator_blink = 0;
+	          offtime_indicator_blink = 0;
+            D1_Daily_Timer_ON_Time_Ind = D1_Daily_Timer_ON_Time;
+            D1_Daily_Timer_OFF_Time_Ind = D1_Daily_Timer_OFF_Time;
+	    
+  	        timer_segment = 0; //initialize this at bootup to 0
+          }
           break;
+          
       } 
 
     case 1:
@@ -941,7 +1141,6 @@ void PanelControl() {
     }
   }
 }
-*/
 
 //This function sends all of the relay coil states up to the Blynk server
 void SendRelayCoils() {    
@@ -1017,7 +1216,7 @@ void DetectAndSendRelayFaults() {
       Blynk.logEvent("Relay1_FaultClear");
 
       Blynk.setProperty(V61, "offLabel", D1_Name);
-      Blynk.setProperty(V61, "onLabel", "D1 ON Label");
+      Blynk.setProperty(V61, "onLabel", "D1 ON Label"); //Can substitute data here if we want to see it on app dashboard button press
       Blynk.setProperty(V61, "offColor", GARDENTEK_GREEN);  
       Blynk.setProperty(V61, "onColor", GARDENTEK_GREEN);  
       Blynk.setProperty(V61, "offBackColor", GARDENTEK_BLUE);  
@@ -1070,7 +1269,7 @@ void DetectAndSendRelayFaults() {
       Blynk.logEvent("Relay2_FaultClear");
 
       Blynk.setProperty(V62, "offLabel", D2_Name);
-      Blynk.setProperty(V62, "onLabel", "D2 ON Label");
+      Blynk.setProperty(V62, "onLabel", "D2 ON Label"); //Can substitute data here if we want to see it on app dashboard button press
       Blynk.setProperty(V62, "offColor", GARDENTEK_GREEN);  
       Blynk.setProperty(V62, "onColor", GARDENTEK_GREEN);  
       Blynk.setProperty(V62, "offBackColor", GARDENTEK_BLUE);  
@@ -1123,7 +1322,7 @@ void DetectAndSendRelayFaults() {
       Blynk.logEvent("Relay3_FaultClear");
 
       Blynk.setProperty(V63, "offLabel", D3_Name);
-      Blynk.setProperty(V63, "onLabel", "D3 ON Label");
+      Blynk.setProperty(V63, "onLabel", "D3 ON Label"); //Can substitute data here if we want to see it on app dashboard button press
       Blynk.setProperty(V63, "offColor", GARDENTEK_GREEN);  
       Blynk.setProperty(V63, "onColor", GARDENTEK_GREEN);  
       Blynk.setProperty(V63, "offBackColor", GARDENTEK_BLUE);  
@@ -1176,7 +1375,7 @@ void DetectAndSendRelayFaults() {
       Blynk.logEvent("Relay4_FaultClear");
 
       Blynk.setProperty(V64, "offLabel", D4_Name);
-      Blynk.setProperty(V64, "onLabel", "D4 ON Label");
+      Blynk.setProperty(V64, "onLabel", "D4 ON Label"); //Can substitute data here if we want to see it on app dashboard button press
       Blynk.setProperty(V64, "offColor", GARDENTEK_GREEN);  
       Blynk.setProperty(V64, "onColor", GARDENTEK_GREEN);  
       Blynk.setProperty(V64, "offBackColor", GARDENTEK_BLUE);  
