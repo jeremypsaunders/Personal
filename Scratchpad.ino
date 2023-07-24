@@ -3,8 +3,9 @@
 #include <DS1307RTC.h>
 #include <Wire.h>
 #include <EEPROM.h>
-
+#include <SparkFun_Alphanumeric_Display.h>
 int testvalue;
+bool blink;
 
 //PIN ASSIGNMENTS
 const int relay1_out = 13;
@@ -12,10 +13,12 @@ const int relay2_out = 12;
 const int relay3_out = 27;
 const int relay4_out = 33;
 
-const int button1 = A4;
-const int button2 = A5;
-const int button3 = 5;
-const int button4 = 18;
+const int DeviceButton = A4;
+const int ModeButton = A5;
+const int SetButton = 5;
+const int IncButton = 18;
+const int DecButton = 19;
+const int ConfirmButton = 16;
 
 const int relay1_in = A3;
 const int relay2_in = A2;
@@ -27,6 +30,10 @@ unsigned long loop_rate;
 UnixTime current_unix_timestamp(0); //"0" is the time zone
 unsigned long current_UNIX_time = 0;
 tmElements_t rtc_time;
+HT16K33 display1;
+HT16K33 display2;
+HT16K33 display3;
+HT16K33 display4;
 unsigned long rtc_seconds_after_midnight;
 unsigned long current_seconds_after_midnight;
 unsigned long PreviousMillis;
@@ -35,7 +42,6 @@ int signalquality;
 bool main_loop_firstcall = true;
 bool Blynk_Enter_Connected_Mode_rqst;
 bool Blynk_Enter_Connected_Mode;
-
 
 //PANEL CONTROL
 String device_indicator;
@@ -71,15 +77,13 @@ int D4_OFF_MIN;
 
 bool timed_out;
 unsigned long last_buttonpress_time;
-bool D1_Mode_edit;
-bool D1_Daily_edit;
-bool D1_Cycle_edit;
 bool DeviceButtonPressed;
 bool ModeButtonPressed;
 bool SetButtonPressed;
 bool IncButtonPressed;
 bool DecButtonPressed;
 bool ConfirmButtonPressed;
+bool ButtonPressed;
 
 bool D1_ModeCmd_Ind;
 bool D2_ModeCmd_Ind;
@@ -105,6 +109,21 @@ bool D1_Cycle_Timer_OFF_Length_Ind;
 bool D2_Cycle_Timer_OFF_Length_Ind;
 bool D3_Cycle_Timer_OFF_Length_Ind;
 bool D4_Cycle_Timer_OFF_Length_Ind;
+
+bool D1_Mode_edit;
+bool D2_Mode_edit;
+bool D3_Mode_edit;
+bool D4_Mode_edit;
+
+bool D1_Daily_edit;
+bool D2_Daily_edit;
+bool D3_Daily_edit;
+bool D4_Daily_edit;
+
+bool D1_Cycle_edit;
+bool D2_Cycle_edit;
+bool D3_Cycle_edit;
+bool D4_Cycle_edit;
 
 //DEVICE SPECIFIC DATA
 String D1_Name;
@@ -605,8 +624,9 @@ void ifConfirmButtonPressed() {
 }
 
 void PanelTimeout() {
-  if ( ((millis() - last_buttonpress_time) > 300000) && timed_out == false ) { //300000 = 5min. Ignoring the millis() rollover here, DNC if a timeout takes twice as long
-    
+  if ( ((millis() - last_buttonpress_time) > 30000) && timed_out == false ) { //300000 = 5min. Ignoring the millis() rollover here, DNC if a timeout takes twice as long
+    display1.print("    ");
+    display2.print("    "); 
     //Reset all values back to actuals, just in case. This code is a one-shot so this is DNC.
     D1_ModeCmd_Ind = D1_ModeCmd;
     D2_ModeCmd_Ind = D2_ModeCmd;
@@ -668,7 +688,7 @@ void PanelTimeout() {
 void PanelControl() {
 
   if ( DeviceButtonPressed == true ) {
-    last_buttonpress_time = millis();
+    last_buttonpress_time = millis(); //need to add this write for other buttons
     if (timed_out == true) {
       display_device = 0;
       timed_out = false;
@@ -752,7 +772,7 @@ void PanelControl() {
           }
         }
         D1_Mode_edit = true;
-        mode_indicator_blink = 2; //2 Hz
+        mode_indicator_blink = 2; //2 Hz        
         mode_indicator = D1_ModeCmd_Ind; //#format
       }
       else {
@@ -1097,12 +1117,22 @@ void PanelControl() {
     
     //reset all editing flags
     D1_Mode_edit = false;
+    D2_Mode_edit = false;
+    D3_Mode_edit = false;
+    D4_Mode_edit = false;
+
     D1_Daily_edit = false;
+    D2_Daily_edit = false;
+    D3_Daily_edit = false;
+    D4_Daily_edit = false;
+    
     D1_Cycle_edit = false;
+    D2_Cycle_edit = false;
+    D3_Cycle_edit = false;
+    D4_Cycle_edit = false;
 
     //Need to add device 2-4 here. Might as well write them all every time just in case
-    /
-    /Un-blink all indicators
+   
     mode_indicator_blink = 0;
     ontime_indicator_blink = 0;
     offtime_indicator_blink = 0;
@@ -1700,6 +1730,7 @@ void D1_control_loop() {
       if ( D1_ModeCmd != 3 ) {                                  
         D1_ResetCycleTimer = true;                              
       }
+    PanelControl();
   }
   D1_ModeCmdRqst_prev = D1_ModeCmdRqst;
   
@@ -2313,7 +2344,7 @@ void D4_control_loop() {
 //If connected to wifi but not the Blynk server, there will be intermittent interuptions while the device tries to connect to the Blynk server.
 //Here we use a simple millis timer to execute the code within at a hard-coded loop rate.
 //If millis rolls over to 0, the very next control loop may execute faster than the loop rate but will not create any other issues.
-void main_loop() { loop_rate = 250; //set loop_rate (ms) here
+void main_loop() { loop_rate = 500; //set loop_rate (ms) here
   
   if ( ButtonPressed == true && main_loop_firstcall == false ) {
     PanelControl();
@@ -2342,20 +2373,35 @@ void main_loop() { loop_rate = 250; //set loop_rate (ms) here
       PanelControl();
 
       //Simulated EEPROM READS///////////////////////////TEST CODE
-      D1_ModeCmdRqst = 3;
-      D1_Cycle_Timer_ON_Length = 5000;
-      D1_Cycle_Timer_OFF_Length = 3000;
-      testvalue = 0;
-      EEPROM.write(5, testvalue);
+      //D1_ModeCmdRqst = 3;
+      //D1_Cycle_Timer_ON_Length = 5000;
+      //D1_Cycle_Timer_OFF_Length = 3000;
+      //testvalue = 0;
+      //EEPROM.write(5, testvalue);
       ////////////////////////////////////////////////////////////
     }
 
     //TEST CODE #remove////////////////////////////////////////////
-    Serial.println(testvalue);
-    Serial.println(EEPROM.read(5));
+    //Serial.println(testvalue);
+    //Serial.println(EEPROM.read(5));
+    
     ///////////////////////////////////////////////////////////////
     GetRTC();
-
+    
+    if (timed_out==false) {
+      if(blink==true) {
+        blink = false;
+        display1.print("HH:MM");
+        display2.print("MODE");
+      }
+      else {
+        blink = true;
+        display1.print("  :MM");
+        display2.print("ON  ");
+      }
+    }
+    
+    
     Blynk_Enter_Connected_Mode = Blynk_Enter_Connected_Mode_rqst; //Read the Blynk request here instead of controlling based on the Blynk request which can happen anywhere in the loop
 
     if (Blynk.connected() == true) {
@@ -2368,7 +2414,7 @@ void main_loop() { loop_rate = 250; //set loop_rate (ms) here
       } 
 
       Blynk.sendInternal("rtc", "sync");                        //query Blynk server for unix rtc. This will write to Blynk server pin "InternalPinRTC"
-                               
+                           
       current_unix_timestamp.getDateTime(current_UNIX_time);    //read "InternalPinRTC" unix time and format to usable time
       current_seconds_after_midnight = current_unix_timestamp.second + current_unix_timestamp.minute * 60 + current_unix_timestamp.hour * 60 * 60;            
       
@@ -2380,6 +2426,7 @@ void main_loop() { loop_rate = 250; //set loop_rate (ms) here
       DetectAndSendRelayFaults();
       CheckHideDevices();
       CheckDeviceNameChanges();
+      PanelTimeout();
 
       Blynk_Enter_Connected_Mode_rqst = false;
     }
@@ -2424,6 +2471,7 @@ void main_loop() { loop_rate = 250; //set loop_rate (ms) here
 
     //Comment all these prints out for customer devices
     Serial.print("**************************MAIN LOOP -- RTC Time:  ");
+    /*
     Serial.printf("%02d", rtc_time.Hour);
     Serial.print(":");
     Serial.printf("%02d", rtc_time.Minute);
@@ -2472,7 +2520,8 @@ void main_loop() { loop_rate = 250; //set loop_rate (ms) here
     Serial.print(" (");
     Serial.print(D4_RelayCmd);
     Serial.println(")");
+    */
+    //Blynk.virtualWrite(V5, 7340, 0, 0);
 
-    
   }
 }
